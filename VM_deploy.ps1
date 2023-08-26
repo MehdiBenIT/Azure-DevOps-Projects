@@ -29,18 +29,6 @@ try{
 
 }
 
-$RGName = "RG01-LAB"
-$Location = "North Europe"
-$SubnetName = "Subnet01"
-$SubnetRange = "192.168.1.0/24"
-$VNetName = "VNET01"
-$VMName = "VM01"
-$VNetRange = "192.168.0.0/16"
-$VMSize = "Standard_D2as_V4"
-$PublicIPName = "PublicIP"
-$NSGName = "NSG01"
-$NICName = "NIC01"
-
 #Création d'un ressource group
 New-AzResourceGroup -NAME $RGName -Location $Location
 
@@ -61,14 +49,10 @@ $NetworkSG = New-AzNetworkSecurityGroup -ResourceGroupName $RGName -Location $Lo
 
 $NetworkInterface = New-AzNetworkInterface -Name $NICName -ResourceGroupName $RGName -Location $Location -SubnetId $VirtualNetwork.Subnets[0].Id -PublicIpAddressId $PublicIP.Id -NetworkSecurityGroupId $NetworkSG.Id
 
-$Username = "MyUser"
-$Password = 'Password123!' | ConvertTo-SecureString -Force -AsPlainText
-$Credential = New-Object -TypeName PSCredential -ArgumentList ($Username, $Password)
-
 $VirtualMachine = New-AzVMConfig -VMName $VMName -VMSize $VMSize
 
 $VirtualMachine = Set-AzVMOperatingSystem -VM $VirtualMachine -Windows -ComputerName $ComputerName -Credential $Credential
 
-$VirtualMachine = Set-AzVMOSDisk -VM $VirtualMachine -Name "VM01-OS" -Windows -DiskSizeInGB 80 -CreateOption FromImage
+$VirtualMachine = Set-AzVMOSDisk -VM $VirtualMachine -Name $VMName -Windows -DiskSizeInGB 80 -CreateOption FromImage
 
 
