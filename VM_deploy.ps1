@@ -23,36 +23,48 @@ param (
 try{
     #Connect to Azure
     Connect-AzAccount -ErrorAction Stop
-}catch{
-    Write-Host -ForegroundColor Red "Une erreur est survenue lors de la connexion..."
-    Write-Host "$($_.exception.message)"
 
+# Create Resource Group
+New-AzResourceGroup -Name $ResourceGroupName -Location $Location -ErrorAction Stop
+
+# Create Virtual Network and Subnet
+$SubnetConfig = New-AzVirtualNetworkSubnetConfig -Name $SubnetName -AddressPrefix $SubnetRange
+$VirtualNetwork = New-AzVirtualNetwork -ResourceGroupName $ResourceGroupName -Location $Location -Name $VNetName -AddressPrefix "192.168.0.0/16" -Subnet $SubnetConfig
+
+# Create Public IP
+$PublicIp = New-AzPublicIpAddress -ResourceGroupName $ResourceGroupName -Location $Location -AllocationMethod "Dynamic" -Name "PublicIP"
+
+# Define Security Rules
+$SecurityGroupRules = @()
+$SecurityGroupRules += New-AzNetworkSecurityRuleConfig -Name "SSH-Rule" -Description "Allow SSH" -Access "Allow" -Protocol "Tcp" -Direction "Inbound" -Priority 100 -DestinationPortRange 22 -SourceAddressPrefix "*" -SourcePortRange "*" -DestinationAddressPrefix "*"
+
+# Create Network Security Group
+$NetworkSecurityGroup = New-AzNetworkSecurityGroup -ResourceGroupName $ResourceGroupName -Location $Location -Name "MyNetworkSecurityGroup" -SecurityRules $SecurityGroupRules
+
+# Create Network Interface
+$Nic = New-AzNetworkInterface -Name "MyNic" -ResourceGroupName $ResourceGroupName -Location $Location -SubnetId $VirtualNetwork.Subnets[0].Id -PublicIpAddressId $PublicIp.Id -NetworkSecurityGroupId $NetworkSecurityGroup.Id
+
+# Retrieve VM password from Azure Key Vault
+$Secret = Get-AzKeyVaultSecret -VaultName $KeyVaultName -Name $SecretName
+$Password = $Secret.SecretValue | ConvertTo-SecureString
+
+# Create VM Configuration
+$VmConfig = New-AzVMConfig -VMName $VMName -VMSize "Standard_D2as_v4"
+
+# Set Availability Set (Optional)
+$AvailabilitySet = New-AzAvailabilitySet -ResourceGroupName $ResourceGroupName -Name "MyAvailabilitySet" -Location $Location
+
+# Set Operating System and Credentials
+$Credential = New-Object -TypeName PSCredential -ArgumentList ($Username, $Password)
+$VmConfig = Set-AzVMOperatingSystem -VM $VmConfig -Windows -ComputerName $VMName -Credential $Credential
+
+# Set OS Disk
+$VmConfig = Set-AzVMOSDisk -VM $VmConfig -Name "${VMName}-OS" -Windows -DiskSizeInGB 128 -CreateOption FromImage
+
+
+# Create the VM
+New-AzVM -ResourceGroupName $ResourceGroupName -Location $Location -VM $VmConfig -Verbose
+} catch {
+    Write-Host -ForegroundColor Red "An error occurred: $($_.Exception.Message)"
+    exit 1
 }
-
-#Création d'un ressource group
-New-AzResourceGroup -NAME $RGName -Location $Location
-
-#Création d'un sous-réseau
-$Subnet = New-AzVirtualNetworkSubnetConfig -Name $SubnetName -AddressPrefix $SubnetRange
-
-$VirtualNetwork = New-AzVirtualNetwork -ResourceGroupName $RGName -Location $Location -Name $VNetName -AddressPrefix $VNetRange -Subnet $Subnet
-
-$PublicIP = New-AzPublicIpAddress -ResourceGroupName $RGName -Location $Location -AllocationMethod "Dynamic" -Name $PublicIPName
-
-Write-Output -InputObject "Creating SSH/RDP network security rule"
-$SecurityGroupRule = switch ("-Windows") {
-    "-Linux" { New-AzNetworkSecurityRuleConfig -Name "SSH-Rule" -Description "Allow SSH" -Access "Allow" -Protocol "TCP" -Direction "Inbound" -Priority 100 -DestinationPortRange 22 -SourceAddressPrefix "*" -SourcePortRange "*" -DestinationAddressPrefix "*" }
-    "-Windows" { New-AzNetworkSecurityRuleConfig -Name "RDP-Rule" -Description "Allow RDP" -Access "Allow" -Protocol "TCP" -Direction "Inbound" -Priority 100 -DestinationPortRange 3389 -SourceAddressPrefix "*" -SourcePortRange "*" -DestinationAddressPrefix "*" }
-}
-
-$NetworkSG = New-AzNetworkSecurityGroup -ResourceGroupName $RGName -Location $Location -Name $NSGName -SecurityRules $SecurityGroupRule
-
-$NetworkInterface = New-AzNetworkInterface -Name $NICName -ResourceGroupName $RGName -Location $Location -SubnetId $VirtualNetwork.Subnets[0].Id -PublicIpAddressId $PublicIP.Id -NetworkSecurityGroupId $NetworkSG.Id
-
-$VirtualMachine = New-AzVMConfig -VMName $VMName -VMSize $VMSize
-
-$VirtualMachine = Set-AzVMOperatingSystem -VM $VirtualMachine -Windows -ComputerName $ComputerName -Credential $Credential
-
-$VirtualMachine = Set-AzVMOSDisk -VM $VirtualMachine -Name $VMName -Windows -DiskSizeInGB 80 -CreateOption FromImage
-
-
