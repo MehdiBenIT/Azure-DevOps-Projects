@@ -2,9 +2,27 @@
 #déploiement d'une machine virtuelle sur Azure
 #Version: 1.0
 
-#Connexion au compte Azure
+#Parameters definition
+param (
+    [string]$RGName,
+    [string]$Location,
+    [string]$SubnetName,
+    [string]$SubmetRange,
+    [string]$VNetName,
+    [string]$VMName,
+    [string]$VNetRange,
+    [string]$VMSize,
+    [string]$PublicIPName,
+    [string]$NSGName,
+    [string]$NICName,
+    [string]$Username,
+    [string]$KeyVaultName,
+    [string]$SecretName
+)
+
 try{
-    Connect-AzAccount
+    #Connect to Azure
+    Connect-AzAccount -ErrorAction Stop
 }catch{
     Write-Host -ForegroundColor Red "Une erreur est survenue lors de la connexion..."
     Write-Host "$($_.exception.message)"
